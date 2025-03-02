@@ -1,7 +1,7 @@
 /**
  * @file luts.c
  * @author Paulo Santos (pauloxrms@gmail.com)
- * @brief //TODO
+ * @brief Define as look up tables dos sensores
  * @version 0.1
  * @date 02-03-2025
  *
