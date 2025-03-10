@@ -43,16 +43,7 @@
 /* USER CODE BEGIN PD */
 
 /** Clamp para evitar wind-up do integrador. */
-#define CLAMP(val, min, max) (((val) > (max)) ? (max) : (((val) < (min)) ? (min) : (val)))
 
-/** Constantes do controlador PI, calculadas por Ziegler-Nichols. */
-#define L 9.02f
-#define T 344.21f
-#define Ti (2 * L)
-#define Td (L / 2.0f)
-#define Kp (1.2f * (T / L))
-#define Ki (Kp / Ti)
-#define Kd (Kp * Td)
 
 /** Número de medições para média de leituras **/
 #define MEAN_EXP 5
@@ -75,7 +66,6 @@ static struct control_area {
         char id[4];
         float sensor_measures[SENSOR_AMOUNT];
         float duty_cycle;
-        float desired;
     } data;
 
     uint16_t adc_measures[SENSOR_AMOUNT][MEAN_SPAN];
@@ -100,7 +90,6 @@ static struct control_area {
                                         'T',
                                         'R',
                                 },
-                        .desired = 25.0f,
                 },
         .ready = false,
 };
@@ -119,29 +108,6 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/** Ajuste do PID, com medidas anti-windup. */
-static float P_I_D(const float dt, const float desired, const float measured) {
-    const float err = desired - measured;
-    const float P = Kp * err;
-    const float I_inc = Ki * err * dt;
-    float D = Kd * (err - control.prev_err) / (dt + 0.000001f);
-
-    control.prev_err = err;
-
-    const float windup_check = P + control.I + I_inc;
-
-    if (windup_check > 100) {
-        return 100;
-    }
-
-    if (windup_check < -100) {
-        return -100;
-    }
-
-    control.I += I_inc;
-
-    return P + control.I;
-}
 
 /* USER CODE END 0 */
 
@@ -197,6 +163,7 @@ int main(void) {
 
         /* USER CODE BEGIN 3 */
 
+        /* Calcula as temperaturas. */
         for (enum sensor_id sensor_id = 0; sensor_id < 2; sensor_id++) {
             for (size_t measure_i = 0; measure_i < MEAN_SPAN; measure_i++) {
                 span_sum += control.adc_measures[sensor_id][measure_i];
@@ -205,16 +172,7 @@ int main(void) {
             control.data.sensor_measures[sensor_id] = adc_luts[sensor_id][span_sum];
         }
 
-        float mean_current_measure = 0;
-        for (enum sensor_id sensor_id = 0; sensor_id < SENSOR_AMOUNT; sensor_id++) {
-            mean_current_measure += control.data.sensor_measures[sensor_id];
-        }
-        mean_current_measure /= SENSOR_AMOUNT;
-        const float dt = (float) (HAL_GetTick() - control.prev_ms) / 1000.0f;
-        control.data.duty_cycle = P_I_D(dt, control.data.desired, mean_current_measure);
-        control.prev_ms = HAL_GetTick();
-
-        control.data.duty_cycle = CLAMP(control.data.duty_cycle, -100, 100);
+        /* Controla o PWM conforme a leitura da memória. */
         if (control.data.duty_cycle > 0) {
             control.pwm_pulse.pos = (uint32_t) (((control.data.duty_cycle / 100.0f) * TIM3->ARR) + 0.5f);
             control.pwm_pulse.neg = 0;
@@ -225,8 +183,6 @@ int main(void) {
 
         TIM3->CCR3 = control.pwm_pulse.pos;
         TIM3->CCR4 = control.pwm_pulse.neg;
-
-        HAL_Delay(1);
     }
     /* USER CODE END 3 */
 }
