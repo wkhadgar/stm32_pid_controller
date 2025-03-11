@@ -22,6 +22,9 @@ enum sensor_id {
   SENSOR_AMOUNT,
 };
 
+/**
+ * @brief Look Up Tables das leituras dos ADCs.
+ */
 extern const float adc_luts[SENSOR_AMOUNT][ADC_RESOLUTION];
 
 #endif /* LUTS_H */

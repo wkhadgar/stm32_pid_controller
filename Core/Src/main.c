@@ -90,6 +90,7 @@ static struct control_area {
                                         'T',
                                         'R',
                                 },
+                        .sensor_measures = {},
                 },
         .ready = false,
 };
@@ -151,7 +152,9 @@ int main(void) {
     }
 
     for (enum sensor_id sensor_id = 0; sensor_id < SENSOR_AMOUNT; sensor_id++) {
-        memset(control.adc_measures[sensor_id], (int) adc_dma_buffer[sensor_id], sizeof(control.adc_measures[sensor_id]));
+        for (uint16_t i = 0; i < MEAN_SPAN; i++) {
+            control.adc_measures[sensor_id][i] = (uint16_t) adc_dma_buffer[sensor_id];
+        }
     }
 
     /* USER CODE END 2 */
@@ -168,7 +171,7 @@ int main(void) {
             for (size_t measure_i = 0; measure_i < MEAN_SPAN; measure_i++) {
                 span_sum += control.adc_measures[sensor_id][measure_i];
             }
-            span_sum <<= MEAN_EXP;
+            span_sum >>= MEAN_EXP;
             control.data.sensor_measures[sensor_id] = adc_luts[sensor_id][span_sum];
         }
 
