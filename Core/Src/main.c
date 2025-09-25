@@ -30,24 +30,27 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "luts.h"
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
+enum sensor_id {
+    SENSOR_A = 0,
+    SENSOR_B,
+
+    SENSOR_AMOUNT,
+};
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-/** Clamp para evitar wind-up do integrador. */
-
-
-/** Número de medições para média de leituras **/
-#define MEAN_EXP 5
-#define MEAN_SPAN (1 << MEAN_EXP)
+/**
+ * @brief Peso da última leitura do ADC, para atenuação e média móvel.
+ */
+#define LAST_MEASURE_WEIGHT 0.99f
 
 /* USER CODE END PD */
 
@@ -64,22 +67,9 @@ static struct control_area {
     /* O bloco de dados para controle e o id devem estar nesta ordem, para acesso direto de memória pelo computador. */
     volatile struct {
         char id[4];
-        float sensor_measures[SENSOR_AMOUNT];
+        float adc_measures[SENSOR_AMOUNT];
         float duty_cycle;
     } data;
-
-    uint16_t adc_measures[SENSOR_AMOUNT][MEAN_SPAN];
-
-    struct {
-        uint32_t pos;
-        uint32_t neg;
-    } pwm_pulse;
-
-    float I;
-    float prev_err;
-    uint32_t prev_ms;
-
-    bool ready;
 } control = {
         .data =
                 {
@@ -90,9 +80,7 @@ static struct control_area {
                                         'T',
                                         'R',
                                 },
-                        .sensor_measures = {},
                 },
-        .ready = false,
 };
 
 /** ADC DMA buffer. */
@@ -118,7 +106,6 @@ void SystemClock_Config(void);
  */
 int main(void) {
     /* USER CODE BEGIN 1 */
-    uint32_t span_sum = 0;
     /* USER CODE END 1 */
 
     /* MCU Configuration--------------------------------------------------------*/
@@ -143,19 +130,11 @@ int main(void) {
     MX_TIM3_Init();
     MX_TIM1_Init();
     /* USER CODE BEGIN 2 */
-    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+
+    HAL_GPIO_WritePin(GPIO_GND_GPIO_Port, GPIO_GND_Pin, GPIO_PIN_RESET);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
     HAL_ADC_Start_DMA(&hadc1, adc_dma_buffer, SENSOR_AMOUNT);
-
-    while (!control.ready) {
-        HAL_Delay(1);
-    }
-
-    for (enum sensor_id sensor_id = 0; sensor_id < SENSOR_AMOUNT; sensor_id++) {
-        for (uint16_t i = 0; i < MEAN_SPAN; i++) {
-            control.adc_measures[sensor_id][i] = (uint16_t) adc_dma_buffer[sensor_id];
-        }
-    }
 
     /* USER CODE END 2 */
 
@@ -166,26 +145,14 @@ int main(void) {
 
         /* USER CODE BEGIN 3 */
 
-        /* Calcula as temperaturas. */
-        for (enum sensor_id sensor_id = 0; sensor_id < 2; sensor_id++) {
-            for (size_t measure_i = 0; measure_i < MEAN_SPAN; measure_i++) {
-                span_sum += control.adc_measures[sensor_id][measure_i];
-            }
-            span_sum >>= MEAN_EXP;
-            control.data.sensor_measures[sensor_id] = adc_luts[sensor_id][span_sum];
-        }
-
         /* Controla o PWM conforme a leitura da memória. */
-        if (control.data.duty_cycle > 0) {
-            control.pwm_pulse.pos = (uint32_t) (((control.data.duty_cycle / 100.0f) * TIM3->ARR) + 0.5f);
-            control.pwm_pulse.neg = 0;
+        if (control.data.duty_cycle < 0) {
+            TIM3->CCR1 = 0;
+            TIM3->CCR2 = (uint32_t) (((control.data.duty_cycle * TIM3->ARR) / -100.0f) + 0.5f);
         } else {
-            control.pwm_pulse.pos = 0;
-            control.pwm_pulse.neg = (uint32_t) (((control.data.duty_cycle / -100.0f) * TIM3->ARR) + 0.5f);
+            TIM3->CCR1 = (uint32_t) (((control.data.duty_cycle * TIM3->ARR) / 100.0f) + 0.5f);
+            TIM3->CCR2 = 0;
         }
-
-        TIM3->CCR3 = control.pwm_pulse.pos;
-        TIM3->CCR4 = control.pwm_pulse.neg;
     }
     /* USER CODE END 3 */
 }
@@ -234,14 +201,16 @@ void SystemClock_Config(void) {
 /* USER CODE BEGIN 4 */
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-    static size_t measure_index = 0;
-
     for (enum sensor_id sensor_id = 0; sensor_id < SENSOR_AMOUNT; sensor_id++) {
-        control.adc_measures[sensor_id][measure_index] = adc_dma_buffer[sensor_id];
-    }
+        const uint16_t adc_measure = adc_dma_buffer[sensor_id];
 
-    measure_index = (measure_index + 1) % MEAN_SPAN;
-    control.ready = true;
+        if (adc_measure > 4095) {
+            continue;
+        }
+
+        control.data.adc_measures[sensor_id] = (LAST_MEASURE_WEIGHT * control.data.adc_measures[sensor_id]) +
+                                               ((1 - LAST_MEASURE_WEIGHT) * adc_measure);
+    }
 }
 
 /* USER CODE END 4 */

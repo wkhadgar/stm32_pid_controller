@@ -59,14 +59,18 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define BOARD_LED_Pin GPIO_PIN_13
 #define BOARD_LED_GPIO_Port GPIOC
-#define NTC_A_Pin GPIO_PIN_4
+#define GPIO_GND_Pin GPIO_PIN_14
+#define GPIO_GND_GPIO_Port GPIOC
+#define NTC_A_Pin GPIO_PIN_2
 #define NTC_A_GPIO_Port GPIOA
-#define NTC_B_Pin GPIO_PIN_5
+#define NTC_B_Pin GPIO_PIN_3
 #define NTC_B_GPIO_Port GPIOA
-#define PWM_HEAT_Pin GPIO_PIN_0
-#define PWM_HEAT_GPIO_Port GPIOB
-#define PWM_COLD_Pin GPIO_PIN_1
+#define PWM_COLD_Pin GPIO_PIN_4
 #define PWM_COLD_GPIO_Port GPIOB
+#define PWM_HEAT_Pin GPIO_PIN_5
+#define PWM_HEAT_GPIO_Port GPIOB
+#define PWM_ENABLE_Pin GPIO_PIN_8
+#define PWM_ENABLE_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
