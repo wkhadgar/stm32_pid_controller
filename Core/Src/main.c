@@ -50,7 +50,7 @@ enum sensor_id {
 /**
  * @brief Peso da última leitura do ADC, para atenuação e média móvel.
  */
-#define LAST_MEASURE_WEIGHT 0.99f
+#define LAST_MEASURE_WEIGHT 0.999f
 
 /* USER CODE END PD */
 
@@ -147,11 +147,11 @@ int main(void) {
 
         /* Controla o PWM conforme a leitura da memória. */
         if (control.data.duty_cycle < 0) {
-            TIM3->CCR1 = 0;
-            TIM3->CCR2 = (uint32_t) (((control.data.duty_cycle * TIM3->ARR) / -100.0f) + 0.5f);
-        } else {
-            TIM3->CCR1 = (uint32_t) (((control.data.duty_cycle * TIM3->ARR) / 100.0f) + 0.5f);
+            TIM3->CCR1 = (uint32_t) (((control.data.duty_cycle * TIM3->ARR) / -100.0f) + 0.5f);
             TIM3->CCR2 = 0;
+        } else {
+            TIM3->CCR1 = 0;
+            TIM3->CCR2 = (uint32_t) (((control.data.duty_cycle * TIM3->ARR) / 100.0f) + 0.5f);
         }
     }
     /* USER CODE END 3 */
